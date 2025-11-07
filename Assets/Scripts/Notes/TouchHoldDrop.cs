@@ -59,6 +59,11 @@ public class TouchHoldDrop : NoteLongDrop
 
         SetfanColor(new Color(1f, 1f, 1f, 0f));
         mask.enabled = false;
+        mask.isCustomRangeActive = true;
+        mask.frontSortingLayerID = fansSprite[5].sortingLayerID;
+        mask.backSortingLayerID = fansSprite[5].sortingLayerID;
+        mask.frontSortingOrder = fansSprite[5].sortingOrder;
+        mask.backSortingOrder = fansSprite[5].sortingOrder - 1;
 
         transform.position = GetAreaPos(startPosition, areaPosition);
 
