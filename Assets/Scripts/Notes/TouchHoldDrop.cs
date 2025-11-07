@@ -1,9 +1,11 @@
-﻿using Assets.Scripts.Types;
+﻿using Assets.Scripts;
+using Assets.Scripts.Types;
 using System;
 using UnityEngine;
 #nullable enable
 public class TouchHoldDrop : NoteLongDrop
 {
+    public char areaPosition = 'C';
     public bool isFirework;
     public GameObject tapEffect;
     public GameObject judgeEffect;
@@ -57,9 +59,16 @@ public class TouchHoldDrop : NoteLongDrop
 
         SetfanColor(new Color(1f, 1f, 1f, 0f));
         mask.enabled = false;
+        mask.isCustomRangeActive = true;
+        mask.frontSortingLayerID = fansSprite[5].sortingLayerID;
+        mask.backSortingLayerID = fansSprite[5].sortingLayerID;
+        mask.frontSortingOrder = fansSprite[5].sortingOrder;
+        mask.backSortingOrder = fansSprite[5].sortingOrder - 1;
+
+        transform.position = GetAreaPos(startPosition, areaPosition);
 
         sensor = GameObject.Find("Sensors")
-                                   .transform.GetChild(16)
+                                   .transform.GetChild((int)GetSensor())
                                    .GetComponent<Sensor>();
         manager = GameObject.Find("Sensors")
                                 .GetComponent<SensorManager>();
@@ -67,11 +76,14 @@ public class TouchHoldDrop : NoteLongDrop
                                  .GetComponent<InputManager>();
         var customSkin = GameObject.Find("Outline").GetComponent<CustomSkin>();
         judgeText = customSkin.JudgeText;
-        inputManager.BindSensor(Check, SensorType.C);
+        inputManager.BindSensor(Check, GetSensor());
     }
     void Check(object sender, InputEventArgs arg)
     {
-        if (isJudged || !noteManager.CanJudge(gameObject, sensor.Type))
+        var type = GetSensor();
+        if (arg.Type != type)
+            return;
+        else if (isJudged || !noteManager.CanJudge(gameObject, sensor.Type))
             return;
         else if (InputManager.Mode is AutoPlayMode.Enable or AutoPlayMode.Random)
             return;
@@ -84,8 +96,8 @@ public class TouchHoldDrop : NoteLongDrop
             Judge();
             if (isJudged)
             {
-                inputManager.UnbindSensor(Check, SensorType.C);
-                objectCounter.NextTouch(SensorType.C);
+                inputManager.UnbindSensor(Check, type);
+                objectCounter.NextTouch(type);
             }
         }
     }
@@ -144,7 +156,7 @@ public class TouchHoldDrop : NoteLongDrop
             {
                 case AutoPlayMode.Enable:
                     if (!isJudged)
-                        objectCounter.NextTouch(SensorType.C);
+                        objectCounter.NextTouch(GetSensor());
                     judgeResult = JudgeType.Perfect;
                     isJudged = true;
                     PlayHoldEffect();
@@ -156,7 +168,7 @@ public class TouchHoldDrop : NoteLongDrop
                 case AutoPlayMode.Random:
                     if (!isJudged)
                     {
-                        objectCounter.NextTouch(SensorType.C);
+                        objectCounter.NextTouch(GetSensor());
                         judgeResult = (JudgeType)UnityEngine.Random.Range(1, 14);
                         isJudged = true;
                     }
@@ -177,7 +189,7 @@ public class TouchHoldDrop : NoteLongDrop
             else if (!timeProvider.isStart) // 忽略暂停
                 return;
 
-            var on = inputManager.CheckSensorStatus(SensorType.C, SensorStatus.On);
+            var on = inputManager.CheckSensorStatus(GetSensor(), SensorStatus.On);
             if (on)
                 PlayHoldEffect();
             else
@@ -190,9 +202,9 @@ public class TouchHoldDrop : NoteLongDrop
         {
             judgeDiff = 316.667f;
             judgeResult = JudgeType.Miss;
-            inputManager.UnbindSensor(Check, SensorType.C);
+            inputManager.UnbindSensor(Check, GetSensor());
             isJudged = true;
-            objectCounter.NextTouch(SensorType.C);
+            objectCounter.NextTouch(GetSensor());
         }
     }
     // Update is called once per frame
@@ -220,7 +232,7 @@ public class TouchHoldDrop : NoteLongDrop
 
         for (var i = 0; i < 4; i++)
         {
-            var pos = (0.226f + distance) * GetAngle(i);
+            var pos = transform.position + (0.226f + distance) * GetAngle(i);
             fans[i].transform.position = pos;
         }
     }
@@ -285,13 +297,13 @@ public class TouchHoldDrop : NoteLongDrop
         print($"TouchHold: {MathF.Round(percent * 100, 2)}%\nTotal Len : {MathF.Round(realityHT * 1000, 2)}ms");
         objectCounter.ReportResult(this, result);
         if (!isJudged)
-            objectCounter.NextTouch(SensorType.C);
+            objectCounter.NextTouch(GetSensor());
         if (isFirework && result != JudgeType.Miss)
         {
             fireworkEffect.SetTrigger("Fire");
             firework.transform.position = transform.position;
         }
-        inputManager.UnbindSensor(Check, SensorType.C);
+        inputManager.UnbindSensor(Check, GetSensor());
         manager.SetSensorOff(sensor.Type, guid);
         PlayJudgeEffect(result);
     }
@@ -308,10 +320,18 @@ public class TouchHoldDrop : NoteLongDrop
         var judgeObj = obj.transform.GetChild(0);
         var flObj = _obj.transform.GetChild(0);
 
-        judgeObj.transform.position = new Vector3(0, -0.6f, 0);
-        flObj.transform.position = new Vector3(0, -1.08f, 0);
-        flObj.GetChild(0).transform.rotation = Quaternion.Euler(Vector3.zero);
-        judgeObj.GetChild(0).transform.rotation = Quaternion.Euler(Vector3.zero);
+        if (sensor.Group != SensorGroup.C)
+        {
+            judgeObj.transform.position = GetPosition(-0.46f);
+            flObj.transform.position = GetPosition(-0.92f);
+        }
+        else
+        {
+            judgeObj.transform.position = new Vector3(0, -0.6f, 0);
+            flObj.transform.position = new Vector3(0, -1.08f, 0);
+        }
+        judgeObj.GetChild(0).transform.rotation = GetRoation();
+        flObj.GetChild(0).transform.rotation = GetRoation();
         var anim = obj.GetComponent<Animator>();
 
         var effects = GameObject.Find("NoteEffects");
@@ -374,5 +394,67 @@ public class TouchHoldDrop : NoteLongDrop
     private void SetfanColor(Color color)
     {
         foreach (var fan in fansSprite) fan.color = color;
+    }
+
+    public SensorType GetSensor() => TouchBase.GetSensor(areaPosition, startPosition);
+
+    private Vector3 GetAreaPos(int index, char area)
+    {
+        /// <summary>
+        /// AreaDistance: 
+        /// C:   0
+        /// E:   3.1
+        /// B:   2.21
+        /// A,D: 4.8
+        /// </summary>
+        if (area == 'C') return Vector3.zero;
+        if (area == 'B')
+        {
+            var angle = -index * (Mathf.PI / 4) + Mathf.PI * 5 / 8;
+            return new Vector3(Mathf.Cos(angle), Mathf.Sin(angle)) * 2.3f;
+        }
+
+        if (area == 'A')
+        {
+            var angle = -index * (Mathf.PI / 4) + Mathf.PI * 5 / 8;
+            return new Vector3(Mathf.Cos(angle), Mathf.Sin(angle)) * 4.1f;
+        }
+
+        if (area == 'E')
+        {
+            var angle = -index * (Mathf.PI / 4) + Mathf.PI * 6 / 8;
+            return new Vector3(Mathf.Cos(angle), Mathf.Sin(angle)) * 3.0f;
+        }
+
+        if (area == 'D')
+        {
+            var angle = -index * (Mathf.PI / 4) + Mathf.PI * 6 / 8;
+            return new Vector3(Mathf.Cos(angle), Mathf.Sin(angle)) * 4.1f;
+        }
+
+        return Vector3.zero;
+    }
+
+    protected Quaternion GetRoation()
+    {
+        if (sensor.Type == SensorType.C)
+            return Quaternion.Euler(Vector3.zero);
+        var d = Vector3.zero - transform.position;
+        var deg = 180 + Mathf.Atan2(d.x, d.y) * Mathf.Rad2Deg;
+
+        return Quaternion.Euler(new Vector3(0, 0, -deg));
+    }
+
+    /// <summary>
+    /// 获取当前坐标指定距离的坐标
+    /// <para>方向：原点</para>
+    /// </summary>
+    /// <param name="distance"></param>
+    /// <returns></returns>
+    Vector3 GetPosition(float distance)
+    {
+        var d = transform.position.magnitude;
+        var ratio = MathF.Max(0, d + distance) / d;
+        return transform.position * ratio;
     }
 }
