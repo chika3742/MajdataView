@@ -64,6 +64,7 @@ public class TouchHoldDrop : NoteLongDrop
 
         transform.position = GetAreaPos(startPosition, areaPosition);
 
+        holdEffect.transform.position = transform.position;
         sensor = GameObject.Find("Sensors")
                                    .transform.GetChild((int)GetSensor())
                                    .GetComponent<Sensor>();
